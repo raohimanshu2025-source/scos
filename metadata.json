@@ -1,0 +1,6 @@
+{
+  "name": "Smart City Operating System",
+  "description": "An Enterprise-grade Smart City Operating System (SCOS) for Indian District Administration (M.Tech Thesis - IIT Kanpur) featuring AI Grievance Triage, Ganges Flood Command, and GIS IoT simulations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
