@@ -1,0 +1,50 @@
+file_path,category,description
+/src/App.tsx,Core Application,Main React application shell with Evaluation & Auth contexts
+/src/main.tsx,Core Application,Vite React application entry point
+/src/index.css,Styles,Tailwind CSS imports and custom design system rules
+/src/design-system/tokens.ts,Design System,Design tokens for typography spacing colors and roles
+/src/services/evaluationStore.ts,Evaluation Module,Evaluation session manager timer instrumentation and research CSV export
+/src/services/incidentStore.ts,Operational Core,Incident store managing operational incident lifecycles and workflow statuses
+/src/services/knowledgeGraphStore.ts,Knowledge Graph,Knowledge Graph store with node/edge entities and graph traversal engines
+/src/services/predictionStore.ts,Predictive AI,Predictive intelligence engine with cascade impact modeling and factor weighting
+/src/services/aiIncidentAnalysis.ts,AI Analysis,Gemini API incident analysis and automated decision support generator
+/src/services/impactMappingRules.ts,Knowledge Graph,Cascading impact rule engine for dependency graph updates
+/src/services/knowledgeGraphService.ts,Knowledge Graph,Knowledge graph querying and subgraph search services
+/src/services/predictionService.ts,Predictive AI,Predictive intelligence evaluation and scenario simulation services
+/src/services/apiClient.ts,API Layer,Frontend HTTP client for backend REST routes
+/src/backend/routes/evaluation.routes.ts,Backend API,Express router for evaluation sessions metrics and CSV export
+/src/backend/routes/auth.routes.ts,Backend API,Express router for authentication RBAC and test suites
+/src/backend/routes/incidents.routes.ts,Backend API,Express router for incident CRUD operations and lifecycle steps
+/src/backend/routes/knowledgeGraph.routes.ts,Backend API,Express router for entity queries and cascade traversal
+/src/backend/routes/predictive.routes.ts,Backend API,Express router for prediction models and scenario simulations
+/src/backend/db/store.ts,Backend Database,In-memory mock database store for users departments and audit logs
+/src/backend/middleware/auth.middleware.ts,Backend Security,Express JWT authentication and RBAC permission enforcement middleware
+/src/components/views/EvaluationView.tsx,UI Component,SCOS Phase 7B Evaluation Mode interface comparing Baseline vs SCOS
+/src/components/views/IncidentDetailView.tsx,UI Component,Detailed incident management view with telemetry tracking
+/src/components/views/KnowledgeGraphView.tsx,UI Component,Interactive Knowledge Graph explorer and entity network visualizer
+/src/components/views/PredictiveIntelligenceView.tsx,UI Component,Predictive risk forecasting decision support and scenario simulator
+/src/components/views/DashboardView.tsx,UI Component,Executive command overview dashboard with metric widgets
+/src/components/views/OperationsView.tsx,UI Component,Operational incident queue and status tracking table
+/src/components/views/GisView.tsx,UI Component,Geographic information system map view with incident spatial layers
+/src/components/views/DepartmentsView.tsx,UI Component,Department management and organizational resource allocation
+/src/components/views/AiCommandView.tsx,UI Component,Natural language AI assistant command interface
+/src/components/views/AdminView.tsx,UI Component,System administration user role management and audit log inspection
+/src/components/views/DesignSystemView.tsx,UI Component,Design system token showcase and UI component library gallery
+/src/components/views/ShellPlaceholderViews.tsx,UI Component,Placeholder views for navigation shell routes
+/src/components/shell/AppShell.tsx,Shell Component,Primary application shell framing navigation top bar and view container
+/src/components/shell/Sidebar.tsx,Shell Component,Navigation sidebar supporting SCOS Evaluation Mode toggle
+/src/components/shell/TopBar.tsx,Shell Component,Header bar with district context global search and user profile controls
+/src/components/shell/Breadcrumbs.tsx,Shell Component,Contextual breadcrumb navigation bar
+/src/components/shell/DistrictContext.tsx,Shell Component,Active operational district selector dropdown
+/src/components/shell/GlobalSearchModal.tsx,Shell Component,Global entity and incident search dialog
+/src/components/shell/NotificationCenterDrawer.tsx,Shell Component,Operational notifications and alert drawer
+/src/context/AuthContext.tsx,State Management,React authentication context and RBAC session hook
+/src/context/EvaluationContext.tsx,State Management,React evaluation context providing real-time timer instrumentation
+/src/context/IncidentContext.tsx,State Management,React incident state provider for operational data synchronization
+/src/context/KnowledgeGraphContext.tsx,State Management,React Knowledge Graph provider for network node state
+/src/context/PredictiveContext.tsx,State Management,React predictive intelligence state provider
+/src/types/auth.ts,TypeScript Types,Authentication roles permissions and user account interface definitions
+/src/types/evaluation.ts,TypeScript Types,Evaluation sessions metrics baseline steps and interaction event interfaces
+/src/types/incident.ts,TypeScript Types,Operational incident severity workflow status and audit trail definitions
+/src/types/knowledgeGraph.ts,TypeScript Types,Knowledge Graph entity types relation edges and cascade impact interfaces
+/src/types/prediction.ts,TypeScript Types,Predictive factor weights risk scores and scenario simulation interfaces

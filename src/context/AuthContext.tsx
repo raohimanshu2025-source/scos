@@ -46,6 +46,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(localStorage.getItem(TOKEN_STORAGE_KEY));
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
+  // Helper to perform initial demo login if unauthenticated
+  const autoLoginDefaultUser = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          loginIdentifier: 'superadmin@kanpur.gov.in',
+          password: 'Password@123',
+        }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const session: UserSession = data.session;
+        localStorage.setItem(TOKEN_STORAGE_KEY, session.token);
+        setToken(session.token);
+        setUser(session.user);
+      } else {
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
+        setToken(null);
+        setUser(null);
+      }
+    } catch (err) {
+      console.error('[AuthContext] Auto-login error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   // Fetch current user from /api/auth/me on mount or token change
   const fetchCurrentUser = useCallback(async (authToken: string) => {
     try {
@@ -59,25 +89,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const data = await response.json();
         setUser(data.user);
       } else {
-        // Token expired or invalid
+        // Token expired or invalid -> trigger auto-login fallback
         localStorage.removeItem(TOKEN_STORAGE_KEY);
         setToken(null);
         setUser(null);
+        await autoLoginDefaultUser();
       }
     } catch (err) {
       console.error('[AuthContext] Session verification error:', err);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [autoLoginDefaultUser]);
 
   useEffect(() => {
     if (token) {
       fetchCurrentUser(token);
     } else {
-      setIsLoading(false);
+      autoLoginDefaultUser();
     }
-  }, [token, fetchCurrentUser]);
+  }, [token, fetchCurrentUser, autoLoginDefaultUser]);
 
   // Login
   const login = async (loginIdentifier: string, password: string) => {

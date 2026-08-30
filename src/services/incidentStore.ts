@@ -696,6 +696,27 @@ class IncidentStoreService {
     return inc;
   }
 
+  public resolveIncident(incidentId: string, officerName: string, officerRole: string): Incident | undefined {
+    const inc = this.getIncidentById(incidentId);
+    if (!inc) return undefined;
+
+    const now = new Date().toISOString();
+    inc.current_status = 'RESOLVED';
+    inc.timestamps.resolved_at = now;
+    inc.timestamps.updated_at = now;
+
+    this.addTimelineEvent({
+      incident_id: incidentId,
+      event_type: 'RESOLVED',
+      title: 'Incident Officially Resolved',
+      description: `Incident marked RESOLVED by ${officerName} (${officerRole}). All operational field actions completed.`,
+      actor_name: officerName,
+      actor_role: officerRole,
+    });
+
+    return inc;
+  }
+
   public resetAndRunDemoScenario(): Incident {
     // Reset Parade Crossing incident to initial state for demo
     const demoInc = INITIAL_DEMO_INCIDENTS[0];

@@ -1,6 +1,6 @@
 {
   "name": "Smart City Operating System",
-  "description": "An Enterprise-grade Smart City Operating System (SCOS) for Indian District Administration (M.Tech Thesis - IIT Kanpur) featuring AI Grievance Triage, Ganges Flood Command, and GIS IoT simulations.",
+  "description": "An Enterprise-grade Smart City Operating System (SCOS) for Indian District Administration (M.Tech Thesis - IIT Kanpur) featuring Urban Digital Twin, Scenario Validation, Comparative Evaluation, Research Dataset Registry, Controlled Experimental Execution, Statistical Analysis, Evidence Synthesis, 9-Layer Reference Architecture Framework, Robustness & Sensitivity Analysis, Phase 11A Integrated Research Validation Hub, Phase 11B Claim & Hypothesis Validation, Phase 11C Thesis Evidence & Academic Reproducibility Package, and Phase 11D Final Research Demonstration, Professor Review & Viva Defense Flow.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

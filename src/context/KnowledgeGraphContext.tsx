@@ -1,11 +1,9 @@
 /**
  * SCOS Phase 5B.6 — Knowledge Graph React Context
- * State management for SCOS entity relationships, active node focus,
- * incident context, cascade impact calculations, research statistics,
- * and 11-step end-to-end scenario playback.
+ * Hardened to route all knowledge graph operations through the authenticated Express HTTP API.
  */
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
   GraphEntity,
   GraphRelationship,
@@ -16,7 +14,8 @@ import {
   GraphDemoStep,
   EntityType,
 } from '../types/knowledgeGraph';
-import { knowledgeGraphService } from '../services/knowledgeGraphService';
+import { apiRequest } from '../services/apiClient';
+import { useAuth } from './AuthContext';
 
 interface KnowledgeGraphContextType {
   entities: GraphEntity[];
@@ -32,23 +31,24 @@ interface KnowledgeGraphContextType {
   currentDemoStepIndex: number;
   isLoading: boolean;
 
-  selectEntity: (id: string | null) => void;
-  loadIncidentContext: (incidentId: string) => void;
-  loadCascadeImpact: (entityId: string) => void;
+  selectEntity: (id: string | null) => Promise<void>;
+  loadIncidentContext: (incidentId: string) => Promise<void>;
+  loadCascadeImpact: (entityId: string) => Promise<void>;
   setSearchQuery: (q: string) => void;
   setTypeFilter: (t?: EntityType) => void;
-  refreshGraph: () => void;
-  advanceScenario: () => void;
-  resetScenario: () => void;
-  importGraphData: (payload: { entities?: GraphEntity[]; relationships?: GraphRelationship[] }) => {
+  refreshGraph: () => Promise<void>;
+  advanceScenario: () => Promise<void>;
+  resetScenario: () => Promise<void>;
+  importGraphData: (payload: { entities?: GraphEntity[]; relationships?: GraphRelationship[] }) => Promise<{
     importedEntities: number;
     importedRelationships: number;
-  };
+  }>;
 }
 
 const KnowledgeGraphContext = createContext<KnowledgeGraphContextType | undefined>(undefined);
 
 export const KnowledgeGraphProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { token, isAuthenticated, isLoading: authLoading } = useAuth();
   const [entities, setEntities] = useState<GraphEntity[]>([]);
   const [relationships, setRelationships] = useState<GraphRelationship[]>([]);
   const [selectedEntity, setSelectedEntity] = useState<GraphEntity | null>(null);
@@ -62,93 +62,145 @@ export const KnowledgeGraphProvider: React.FC<{ children: React.ReactNode }> = (
   const [currentDemoStepIndex, setCurrentDemoStepIndex] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  const refreshGraph = () => {
+  const refreshGraph = useCallback(async () => {
+    const activeToken = token || localStorage.getItem('scos_auth_token');
+    if (!activeToken && (!isAuthenticated || authLoading)) return;
+
     setIsLoading(true);
     try {
-      const allEnts = knowledgeGraphService.searchEntities(searchQuery, typeFilter);
+      const queryParams = new URLSearchParams();
+      if (searchQuery) queryParams.append('q', searchQuery);
+      if (typeFilter) queryParams.append('type', typeFilter);
+
+      const [entData, relData, statsData, scenarioData] = await Promise.all([
+        apiRequest<{ success: boolean; data: GraphEntity[] }>(`/api/graph/entities?${queryParams.toString()}`),
+        apiRequest<{ success: boolean; data: GraphRelationship[] }>('/api/graph/relationships'),
+        apiRequest<{ success: boolean; data: GraphStats }>('/api/graph/stats'),
+        apiRequest<{ success: boolean; steps: GraphDemoStep[]; currentIndex: number }>('/api/graph/scenario'),
+      ]);
+
+      const allEnts = entData.data || [];
       setEntities(allEnts);
+      setRelationships(relData.data || []);
+      setStats(statsData.data || null);
+      setDemoSteps(scenarioData.steps || []);
+      setCurrentDemoStepIndex(scenarioData.currentIndex || 0);
 
-      const allRels = knowledgeGraphService.getAllRelationships();
-      setRelationships(allRels);
-
-      const st = knowledgeGraphService.getGraphStats();
-      setStats(st);
-
-      setDemoSteps(knowledgeGraphService.getDemoSteps());
-      setCurrentDemoStepIndex(knowledgeGraphService.getDemoStepIndex());
-
-      // Default select incident if available
       if (!selectedEntity && allEnts.length > 0) {
         const inc = allEnts.find((e) => e.type === 'INCIDENT') || allEnts[0];
         if (inc) {
           setSelectedEntity(inc);
-          const nh = knowledgeGraphService.getNeighborhood(inc.id);
-          setSelectedNeighborhood(nh);
+          const nh = await apiRequest<{ success: boolean; data: GraphNeighborhood }>(
+            `/api/graph/entities/${inc.id}/neighborhood`
+          );
+          setSelectedNeighborhood(nh.data || null);
         }
       }
-    } catch (err) {
-      console.error('Error refreshing knowledge graph:', err);
+    } catch (err: any) {
+      console.warn('[KnowledgeGraphContext] Error refreshing knowledge graph API:', err?.message || err);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [searchQuery, typeFilter, selectedEntity, token, isAuthenticated, authLoading]);
 
   useEffect(() => {
-    refreshGraph();
-  }, [searchQuery, typeFilter]);
+    if (isAuthenticated && !authLoading) {
+      refreshGraph();
+    }
+  }, [isAuthenticated, authLoading, token, searchQuery, typeFilter]);
 
-  const selectEntity = (id: string | null) => {
+  const selectEntity = async (id: string | null) => {
     if (!id) {
       setSelectedEntity(null);
       setSelectedNeighborhood(null);
       return;
     }
-    const ent = knowledgeGraphService.getEntity(id);
-    if (ent) {
-      setSelectedEntity(ent);
-      const nh = knowledgeGraphService.getNeighborhood(id);
-      setSelectedNeighborhood(nh);
-    }
-  };
-
-  const loadIncidentContext = (incidentId: string) => {
-    setIsLoading(true);
     try {
-      const ctx = knowledgeGraphService.getContextForIncident(incidentId);
-      setIncidentContext(ctx);
+      setIsLoading(true);
+      const [entRes, nhRes] = await Promise.all([
+        apiRequest<{ success: boolean; data: GraphEntity }>(`/api/graph/entities/${id}`),
+        apiRequest<{ success: boolean; data: GraphNeighborhood }>(`/api/graph/entities/${id}/neighborhood`),
+      ]);
+      setSelectedEntity(entRes.data || null);
+      setSelectedNeighborhood(nhRes.data || null);
     } catch (err) {
-      console.error('Failed to load incident context:', err);
+      console.error('[KnowledgeGraphContext] Error selecting entity:', err);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const loadCascadeImpact = (entityId: string) => {
+  const loadIncidentContext = async (incidentId: string) => {
     setIsLoading(true);
     try {
-      const res = knowledgeGraphService.getCascadeImpact(entityId);
-      setCascadeResult(res);
+      const res = await apiRequest<{ success: boolean; data: IncidentContext }>(
+        `/api/graph/incident-context/${incidentId}`
+      );
+      setIncidentContext(res.data || null);
     } catch (err) {
-      console.error('Failed to calculate cascade impact:', err);
+      console.error('[KnowledgeGraphContext] Failed to load incident context:', err);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const advanceScenario = () => {
-    knowledgeGraphService.advanceDemoStep();
-    setCurrentDemoStepIndex(knowledgeGraphService.getDemoStepIndex());
+  const loadCascadeImpact = async (entityId: string) => {
+    setIsLoading(true);
+    try {
+      const res = await apiRequest<{ success: boolean; data: CascadeImpactResult }>(
+        `/api/graph/cascade-impact/${entityId}`
+      );
+      setCascadeResult(res.data || null);
+    } catch (err) {
+      console.error('[KnowledgeGraphContext] Failed to calculate cascade impact:', err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const resetScenario = () => {
-    knowledgeGraphService.resetDemoScenario();
-    setCurrentDemoStepIndex(0);
+  const advanceScenario = async () => {
+    try {
+      setIsLoading(true);
+      const res = await apiRequest<{ success: boolean; currentIndex: number }>('/api/graph/scenario/advance', {
+        method: 'POST',
+      });
+      setCurrentDemoStepIndex(res.currentIndex);
+      await refreshGraph();
+    } catch (err) {
+      console.error('[KnowledgeGraphContext] Failed to advance scenario:', err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const importGraphData = (payload: { entities?: GraphEntity[]; relationships?: GraphRelationship[] }) => {
-    const res = knowledgeGraphService.importGraphData(payload);
-    refreshGraph();
-    return res;
+  const resetScenario = async () => {
+    try {
+      setIsLoading(true);
+      await apiRequest('/api/graph/scenario/reset', { method: 'POST' });
+      setCurrentDemoStepIndex(0);
+      await refreshGraph();
+    } catch (err) {
+      console.error('[KnowledgeGraphContext] Failed to reset scenario:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const importGraphData = async (payload: { entities?: GraphEntity[]; relationships?: GraphRelationship[] }) => {
+    try {
+      setIsLoading(true);
+      const res = await apiRequest<{
+        success: boolean;
+        data: { importedEntities: number; importedRelationships: number };
+      }>('/api/graph/import', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      await refreshGraph();
+      return res.data || { importedEntities: 0, importedRelationships: 0 };
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

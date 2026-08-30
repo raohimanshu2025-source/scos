@@ -31,11 +31,11 @@ export const GraphStatsView: React.FC = () => {
     return <Card className="p-8 text-center text-xs text-slate-500">Loading graph statistics...</Card>;
   }
 
-  const handleImport = (e: React.FormEvent) => {
+  const handleImport = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       const parsed = JSON.parse(jsonInput);
-      const res = importGraphData(parsed);
+      const res = await importGraphData(parsed);
       setImportMessage(`Successfully imported ${res.importedEntities} entities and ${res.importedRelationships} relationships.`);
       setJsonInput('');
     } catch (err: any) {

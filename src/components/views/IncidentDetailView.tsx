@@ -23,6 +23,8 @@ import {
   XCircle,
   Plus,
   Share2,
+  Compass,
+  Droplets,
 } from 'lucide-react';
 import { PageHeader } from '../shell/PageHeader';
 import { Card } from '../ui/Card';
@@ -32,8 +34,15 @@ import { MapContainer } from '../ui/MapContainer';
 import { Input, Textarea } from '../ui/FormControls';
 import { useIncidents } from '../../context/IncidentContext';
 import { useKnowledgeGraph } from '../../context/KnowledgeGraphContext';
+import { usePredictive, IncidentPredictiveAssessment } from '../../context/PredictiveContext';
+import { useEvaluation } from '../../context/EvaluationContext';
 import { Incident, TaskStatus } from '../../types/incident';
 import { DEPARTMENT_MAP } from '../../services/impactMappingRules';
+import { spatialService } from '../../services/spatialService';
+import { CivilCascadeImpact } from '../../types/infrastructure';
+import { DepartmentCoordinationPanel } from '../coordination/DepartmentCoordinationPanel';
+import { IncidentDecisionSupportSection } from '../coordination/IncidentDecisionSupportSection';
+import { IncidentDigitalTwinSection } from '../digitalTwin/IncidentDigitalTwinSection';
 
 export interface IncidentDetailViewProps {
   incidentId: string;
@@ -49,17 +58,65 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({ incident
     rejectRecommendation,
     updateTaskStatus,
     triggerSlaEscalation,
+    resolveIncident,
+    launchDemoScenario,
     reAnalyzeWithAi,
     isLoading,
   } = useIncidents();
 
   const { loadIncidentContext, incidentContext } = useKnowledgeGraph();
+  const { evaluateIncidentPrediction } = usePredictive();
+  const { recordAccessEvent } = useEvaluation();
+
+  const [predictiveAssessment, setPredictiveAssessment] = useState<IncidentPredictiveAssessment | null>(null);
+  const [isEvaluatingPredictive, setIsEvaluatingPredictive] = useState(false);
+  const [predictiveError, setPredictiveError] = useState(false);
+  const [civilImpact, setCivilImpact] = useState<CivilCascadeImpact | null>(null);
 
   React.useEffect(() => {
     if (selectedIncident) {
       loadIncidentContext(selectedIncident.incident_id);
+      recordAccessEvent('INCIDENT_VIEW', selectedIncident.incident_id);
+      recordAccessEvent('GRAPH_CONTEXT_VIEW', `GRAPH:${selectedIncident.incident_id}`);
+      recordAccessEvent('AI_ANALYSIS_VIEW', `AI:${selectedIncident.incident_id}`);
+      recordAccessEvent('CASCADE_VIEW', `CASCADE:${selectedIncident.incident_id}`);
+      recordAccessEvent('DEPARTMENT_VIEW', `DEPTS:${selectedIncident.affected_departments.join(',')}`);
+      // Reset predictive state on incident switch
+      setPredictiveAssessment(null);
+      setPredictiveError(false);
+
+      // Fetch Civil Infrastructure Proximity & Impact Analysis
+      spatialService
+        .getIncidentImpact(
+          selectedIncident.incident_id,
+          selectedIncident.latitude,
+          selectedIncident.longitude
+        )
+        .then((res) => {
+          if (res.success) setCivilImpact(res.data);
+        })
+        .catch((err) => console.warn('Failed to load civil infrastructure impact:', err));
     }
   }, [selectedIncident?.incident_id]);
+
+  const handleRunPredictiveAssessment = async () => {
+    if (!selectedIncident) return;
+    setIsEvaluatingPredictive(true);
+    setPredictiveError(false);
+    try {
+      const result = await evaluateIncidentPrediction(selectedIncident.incident_id);
+      if (result) {
+        setPredictiveAssessment(result);
+        recordAccessEvent('PREDICTIVE_ASSESSMENT', `PREDICT:${selectedIncident.incident_id}`);
+      } else {
+        setPredictiveError(true);
+      }
+    } catch (err) {
+      setPredictiveError(true);
+    } finally {
+      setIsEvaluatingPredictive(false);
+    }
+  };
 
   const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'TASKS' | 'TIMELINE' | 'GOVERNANCE'>('OVERVIEW');
   const [rejectReason, setRejectReason] = useState('');
@@ -104,8 +161,57 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({ incident
     await triggerSlaEscalation(inc.incident_id, taskId);
   };
 
+  const handleResolveIncident = async () => {
+    await resolveIncident(inc.incident_id);
+  };
+
   return (
     <div className="space-y-6 font-sans">
+      {/* SCOS Demonstration Mode Top Banner */}
+      <div className="p-3.5 bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-amber-500/10 border border-amber-300 rounded-xl flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+        <div className="flex items-center gap-2.5">
+          <span className="px-2.5 py-1 bg-amber-600 text-white font-mono font-bold text-[10px] rounded uppercase tracking-wider">
+            SCOS DEMONSTRATION MODE
+          </span>
+          <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono font-bold">
+            <span className="bg-white/80 text-amber-900 px-2 py-0.5 rounded border border-amber-200">
+              SIMULATED DEMONSTRATION DATA
+            </span>
+            <span className="bg-white/80 text-amber-900 px-2 py-0.5 rounded border border-amber-200">
+              SIMULATED TIMELINE
+            </span>
+            <span className="bg-white/80 text-amber-900 px-2 py-0.5 rounded border border-amber-200">
+              SIMULATED PREDICTIVE INPUTS
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => launchDemoScenario()}
+            isLoading={isLoading}
+            icon={<Zap className="w-3.5 h-3.5 text-amber-600" />}
+            className="text-xs bg-white text-amber-900 border-amber-300 hover:bg-amber-50"
+          >
+            Reset Demo Scenario
+          </Button>
+          {inc.current_status !== 'RESOLVED' && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleResolveIncident}
+              isLoading={isLoading}
+              icon={<CheckCircle2 className="w-3.5 h-3.5" />}
+              className="text-xs bg-emerald-700 hover:bg-emerald-800"
+            >
+              Resolve Incident
+            </Button>
+          )}
+        </div>
+      </div>
+
       {/* Top Breadcrumb & Page Header */}
       <PageHeader
         title={`${inc.title} (${inc.incident_id})`}
@@ -121,6 +227,60 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({ incident
           onClick: onBack,
         }}
       />
+
+      {/* SCOS UNIFIED DECISION SUPPORT PANEL */}
+      <Card className="p-5 border-indigo-300 bg-gradient-to-br from-indigo-50/40 via-white to-amber-50/30 space-y-4 shadow-sm">
+        <div className="flex items-center justify-between border-b border-indigo-100 pb-3">
+          <div className="flex items-center gap-2">
+            <Brain className="w-5 h-5 text-indigo-700" />
+            <h3 className="text-sm font-bold uppercase text-slate-900 tracking-wider">
+              SCOS DECISION SUPPORT
+            </h3>
+          </div>
+          <span className="text-[10px] font-mono font-bold text-indigo-800 bg-indigo-100 px-2.5 py-1 rounded border border-indigo-200">
+            Unified Operational Intelligence
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+          {/* Incident & Risk Level */}
+          <div className="p-3 bg-white/80 rounded-xl border border-slate-200 space-y-1">
+            <span className="text-[10px] font-mono font-bold text-slate-400 uppercase">Incident Risk Level</span>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-bold text-slate-900">{predictiveAssessment?.risk_level || inc.severity}</span>
+              <span className="text-xs font-mono font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded border border-amber-200">
+                Score: {predictiveAssessment?.risk_score ?? (inc.severity === 'CRITICAL' ? 82 : 65)} / 100
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-500 truncate">{inc.location}</p>
+          </div>
+
+          {/* AI Summary */}
+          <div className="p-3 bg-white/80 rounded-xl border border-slate-200 space-y-1">
+            <span className="text-[10px] font-mono font-bold text-slate-400 uppercase">AI Summary</span>
+            <p className="text-xs font-medium text-slate-800 line-clamp-2">
+              {inc.AI_assessment?.impact_summary || inc.estimated_impact}
+            </p>
+          </div>
+
+          {/* Key Context & Cascade */}
+          <div className="p-3 bg-white/80 rounded-xl border border-slate-200 space-y-1">
+            <span className="text-[10px] font-mono font-bold text-slate-400 uppercase">Key Context & Cascade</span>
+            <p className="text-[11px] text-slate-700 font-medium">
+              Waterlogging → Road Obstruction → Hospital Access & Drainage Overflow
+            </p>
+          </div>
+
+          {/* Decision Status & Affected Depts */}
+          <div className="p-3 bg-white/80 rounded-xl border border-slate-200 space-y-1">
+            <span className="text-[10px] font-mono font-bold text-slate-400 uppercase">Human Decision Status</span>
+            <div className="flex items-center justify-between mt-0.5">
+              <StatusBadge status={isApproved ? 'NORMAL' : 'WARNING'} label={inc.AI_assessment?.status || 'PENDING'} />
+              <span className="text-[10px] font-mono text-slate-600">{inc.affected_departments.length} Depts</span>
+            </div>
+          </div>
+        </div>
+      </Card>
 
       {/* Primary Key Operational Status Banner */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -405,10 +565,289 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({ incident
                 )}
               </Card>
             )}
+
+            {/* SCOS Civil Infrastructure & Spatial Intelligence Impact Card */}
+            {civilImpact && (
+              <Card className="p-5 border-sky-200 bg-white space-y-4 shadow-xs">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Compass className="w-4 h-4 text-sky-600" />
+                    <h4 className="text-xs font-bold uppercase text-slate-900 tracking-wider">
+                      SCOS CIVIL INFRASTRUCTURE & SPATIAL IMPACT
+                    </h4>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold text-sky-800 bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
+                    Proximity & Cascade Engine
+                  </span>
+                </div>
+
+                {/* Nearby Infrastructure Assets */}
+                <div className="space-y-2">
+                  <span className="text-[10px] font-mono font-bold text-slate-500 uppercase">
+                    Nearby Civil Infrastructure ({civilImpact.nearbyAssets.length} Assets within 2.5km)
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    {civilImpact.nearbyAssets.slice(0, 4).map((res) => (
+                      <div
+                        key={res.asset.assetId}
+                        className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-0.5"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-slate-900 truncate">{res.asset.assetName}</span>
+                          <span className="text-[10px] font-mono font-bold text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded">
+                            {res.distanceKm}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-500">{res.asset.department} • Status: {res.asset.status}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Cascade Impact Chain */}
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <span className="text-[10px] font-mono font-bold text-slate-500 uppercase">
+                    Civil Infrastructure Cascade Chain
+                  </span>
+                  <div className="space-y-2">
+                    {civilImpact.impactChain.map((step) => (
+                      <div
+                        key={step.step}
+                        className="p-3 bg-sky-50/40 border border-sky-100 rounded-xl text-xs space-y-1"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-slate-900">
+                            Step {step.step}: {step.affectedAsset}
+                          </span>
+                          <span className="text-[9px] font-mono font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                            {step.verificationStatus}
+                          </span>
+                        </div>
+                        <p className="text-slate-700 text-[11px]">{step.potentialImpact}</p>
+                        {step.mitigationAction && (
+                          <p className="text-[10px] text-sky-800 font-medium">
+                            Proposed Action: {step.mitigationAction}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-[10px] text-amber-900 font-medium">
+                  {civilImpact.disclaimer}
+                </div>
+              </Card>
+            )}
+
+            {/* SCOS Multi-Department Operational Coordination Section */}
+            <DepartmentCoordinationPanel incident={inc} />
+
+            {/* SCOS Operational Decision Support Section */}
+            <IncidentDecisionSupportSection incidentId={inc.incident_id} incident={inc} />
+
+            {/* SCOS Urban Digital Twin Foundation Context */}
+            <IncidentDigitalTwinSection incident={inc} />
+
+            {/* SCOS Predictive Risk Assessment Section */}
+            <Card className="p-5 border-amber-200 bg-white space-y-4 shadow-xs">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-amber-600" />
+                  <h4 className="text-xs font-bold uppercase text-slate-900 tracking-wider">
+                    SCOS PREDICTIVE RISK ASSESSMENT
+                  </h4>
+                </div>
+                <span className="text-[10px] font-mono font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                  Prototype Predictive Assessment
+                </span>
+              </div>
+
+              {!predictiveAssessment && !predictiveError && (
+                <div className="p-4 text-center bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                  <p className="text-xs text-slate-600 font-medium">
+                    Evaluate predictive risk model for this incident location, severity, and telemetry context.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRunPredictiveAssessment}
+                    isLoading={isEvaluatingPredictive}
+                    icon={<Zap className="w-3.5 h-3.5 text-amber-600" />}
+                    className="text-xs border-amber-300 text-amber-900 hover:bg-amber-50"
+                  >
+                    Run Predictive Assessment
+                  </Button>
+                </div>
+              )}
+
+              {predictiveError && (
+                <div className="p-4 text-center bg-rose-50/70 border border-rose-200 rounded-xl space-y-2">
+                  <p className="text-xs font-bold text-rose-800">
+                    Predictive assessment currently unavailable.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRunPredictiveAssessment}
+                    isLoading={isEvaluatingPredictive}
+                    className="text-xs text-rose-700 border-rose-300"
+                  >
+                    Retry Assessment
+                  </Button>
+                </div>
+              )}
+
+              {predictiveAssessment && (
+                <div className="space-y-4 text-xs font-sans">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="p-3 bg-amber-50/50 border border-amber-200 rounded-xl">
+                      <span className="text-[10px] font-mono font-bold text-slate-500 uppercase block">Risk Level</span>
+                      <span className="text-sm font-bold text-amber-900">{predictiveAssessment.risk_level}</span>
+                    </div>
+                    <div className="p-3 bg-amber-50/50 border border-amber-200 rounded-xl">
+                      <span className="text-[10px] font-mono font-bold text-slate-500 uppercase block">Risk Score</span>
+                      <span className="text-sm font-bold text-amber-900">{predictiveAssessment.risk_score} / 100</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h5 className="text-[10px] font-mono font-bold text-slate-500 uppercase mb-1.5">Key Risk Factors</h5>
+                    <ul className="space-y-1 bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-slate-800">
+                      {predictiveAssessment.key_risk_factors.map((factor, idx) => (
+                        <li key={idx} className="flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                          <span>{factor}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h5 className="text-[10px] font-mono font-bold text-slate-500 uppercase mb-1.5">Potential Service Impact</h5>
+                    <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-slate-800 space-y-1">
+                      {predictiveAssessment.potential_service_impacts.map((impact, idx) => (
+                        <p key={idx}>{impact}</p>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h5 className="text-[10px] font-mono font-bold text-slate-500 uppercase mb-1.5">Preventive Actions</h5>
+                    <div className="space-y-1.5">
+                      {predictiveAssessment.preventive_actions.map((act, idx) => (
+                        <div key={idx} className="p-2 bg-indigo-50/50 border border-indigo-200 rounded-lg text-indigo-950 font-medium">
+                          {act}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                    <span className="text-[10px] font-mono text-slate-400">
+                      Evaluated: {new Date(predictiveAssessment.evaluated_at).toLocaleTimeString()}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRunPredictiveAssessment}
+                      isLoading={isEvaluatingPredictive}
+                      className="text-[11px] h-7"
+                    >
+                      Re-Run
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </Card>
+            {/* SCOS CASCADE IMPACT ANALYSIS CARD */}
+            <Card className="p-5 border-rose-200 bg-white space-y-4 shadow-xs">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-rose-600" />
+                  <h4 className="text-xs font-bold uppercase text-slate-900 tracking-wider">
+                    SCOS CASCADE IMPACT ANALYSIS
+                  </h4>
+                </div>
+                <span className="text-[10px] font-mono font-bold text-rose-800 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                  Multi-Tier Ripple Simulation
+                </span>
+              </div>
+
+              <div className="space-y-2.5 text-xs font-sans">
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                  <span className="text-[10px] font-mono font-bold text-rose-700 uppercase">Primary Trigger</span>
+                  <p className="font-bold text-slate-900">Heavy Rainfall & Standing Surface Inundation</p>
+                  <p className="text-[11px] text-slate-600">0.65m standing water at Parade Crossing & Mall Road</p>
+                </div>
+
+                <div className="relative pl-4 border-l-2 border-rose-300 space-y-2 py-1">
+                  <div className="p-2.5 bg-amber-50/70 border border-amber-200 rounded-lg space-y-0.5">
+                    <span className="text-[10px] font-mono font-bold text-amber-900 uppercase">Tier 1 Cascade (Potential)</span>
+                    <p className="font-bold text-amber-950 text-[11px]">Roadway Conduit Obstruction & Traffic Diversion</p>
+                    <p className="text-[10px] text-amber-800">Commercial traffic blockage requires verification by Traffic Police.</p>
+                  </div>
+
+                  <div className="p-2.5 bg-rose-50/70 border border-rose-200 rounded-lg space-y-0.5">
+                    <span className="text-[10px] font-mono font-bold text-rose-900 uppercase">Tier 2 Cascade (Possible)</span>
+                    <p className="font-bold text-rose-950 text-[11px]">Critical Facility Access Route Disruption</p>
+                    <p className="text-[10px] text-rose-800">Hospital ambulance access to Ursula Horsman Casualty ward potentially constrained.</p>
+                  </div>
+                </div>
+
+                <p className="text-[10px] italic text-slate-500 bg-slate-50 p-2 rounded border border-slate-200">
+                  * Note: Operational cascades are simulated estimates for decision support. Field verification required before dispatching emergency units.
+                </p>
+              </div>
+            </Card>
           </div>
 
           {/* Right Column: Affected Departments & Quick Actions */}
           <div className="space-y-6">
+            {/* PROTOTYPE DEMONSTRATION METRICS CARD */}
+            <Card className="p-5 border-indigo-200 bg-indigo-50/20 space-y-3">
+              <div className="flex items-center justify-between border-b border-indigo-100 pb-2">
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal className="w-4 h-4 text-indigo-600" />
+                  <h4 className="text-xs font-bold uppercase text-indigo-900 tracking-wider">
+                    PROTOTYPE DEMONSTRATION METRICS
+                  </h4>
+                </div>
+                <span className="text-[9px] font-mono text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded">
+                  Live Telemetry
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="p-2.5 bg-white rounded-lg border border-slate-200">
+                  <span className="text-[10px] font-mono text-slate-500 uppercase block">Departments</span>
+                  <span className="text-sm font-bold text-slate-900">{inc.affected_departments.length} Involved</span>
+                </div>
+                <div className="p-2.5 bg-white rounded-lg border border-slate-200">
+                  <span className="text-[10px] font-mono text-slate-500 uppercase block">Tasks Generated</span>
+                  <span className="text-sm font-bold text-indigo-700">{inc.assigned_tasks.length} Active</span>
+                </div>
+                <div className="p-2.5 bg-white rounded-lg border border-slate-200">
+                  <span className="text-[10px] font-mono text-slate-500 uppercase block">Graph Entities</span>
+                  <span className="text-sm font-bold text-slate-900">
+                    {incidentContext ? incidentContext.nearbyAssets.length + incidentContext.nearbyFacilities.length : 3} Nodes
+                  </span>
+                </div>
+                <div className="p-2.5 bg-white rounded-lg border border-slate-200">
+                  <span className="text-[10px] font-mono text-slate-500 uppercase block">Audit Events</span>
+                  <span className="text-sm font-bold text-slate-900">{selectedTimeline.length} Logs</span>
+                </div>
+                <div className="p-2.5 bg-white rounded-lg border border-slate-200">
+                  <span className="text-[10px] font-mono text-slate-500 uppercase block">Predictive Compute</span>
+                  <span className="text-xs font-bold text-amber-800">~120 ms</span>
+                </div>
+                <div className="p-2.5 bg-white rounded-lg border border-slate-200">
+                  <span className="text-[10px] font-mono text-slate-500 uppercase block">AI Triage Compute</span>
+                  <span className="text-xs font-bold text-indigo-800">~450 ms</span>
+                </div>
+              </div>
+            </Card>
+
             {/* Affected Departments Summary */}
             <Card className="p-5 space-y-4">
               <h4 className="text-xs font-bold uppercase text-slate-700 tracking-wider">
@@ -579,9 +1018,14 @@ export const IncidentDetailView: React.FC<IncidentDetailViewProps> = ({ incident
       {/* TAB 3: TIMELINE */}
       {activeTab === 'TIMELINE' && (
         <Card className="p-5 space-y-4">
-          <h3 className="text-xs font-bold uppercase text-slate-700 tracking-wider">
-            Incident Event Audit Timeline
-          </h3>
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 className="text-xs font-bold uppercase text-slate-700 tracking-wider">
+              Incident Event Audit Timeline
+            </h3>
+            <span className="text-[10px] font-mono font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+              SIMULATED DEMONSTRATION TIMELINE
+            </span>
+          </div>
 
           <div className="relative border-l-2 border-indigo-200 ml-3 space-y-6 pl-5 font-sans">
             {selectedTimeline.map((ev) => (

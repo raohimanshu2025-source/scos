@@ -3,7 +3,17 @@ import jwt from 'jsonwebtoken';
 import { dbStore, ROLE_PERMISSIONS_MAP } from '../db/store';
 import { RoleType, PermissionType, AccountStatus, User } from '../../types/auth';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'scos-development-jwt-secret-key-kanpur-district-2026';
+const DEV_JWT_SECRET = 'scos-development-jwt-secret-key-kanpur-district-2026';
+
+function getJwtSecret(): string {
+  if (process.env.NODE_ENV === 'production') {
+    if (!process.env.JWT_SECRET) {
+      throw new Error('[FATAL SECURITY EXCEPTION] JWT_SECRET environment variable is missing in production mode.');
+    }
+    return process.env.JWT_SECRET;
+  }
+  return process.env.JWT_SECRET || DEV_JWT_SECRET;
+}
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -40,7 +50,7 @@ export function generateJwtToken(user: User): string {
     permissions,
   };
 
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '8h' });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: '8h' });
 }
 
 export function authenticateToken(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
@@ -64,7 +74,7 @@ export function authenticateToken(req: AuthenticatedRequest, res: Response, next
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    const decoded = jwt.verify(token, getJwtSecret()) as any;
     
     // Check account status in DB
     const freshUser = dbStore.findUserById(decoded.sub);

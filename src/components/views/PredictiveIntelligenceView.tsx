@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { usePredictive } from '../../context/PredictiveContext';
+import { ProvenanceBadge } from '../ui/ProvenanceBadge';
 import {
   Brain,
   ShieldAlert,
@@ -62,13 +63,22 @@ export const PredictiveIntelligenceView: React.FC = () => {
 
         <div className="relative z-10 flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-black uppercase tracking-widest text-indigo-400 font-mono">
                 AI-SCOS Phase 5B.5
               </span>
               <span className="text-[10px] bg-indigo-500/20 text-indigo-300 px-2.5 py-0.5 rounded-full font-mono border border-indigo-500/30 font-bold">
                 Predictive Intelligence & Decision Support
               </span>
+              <ProvenanceBadge
+                sourceName="SCOS Predictive Intelligence Model"
+                sourceId="DS-SCOS-SIM-06"
+                department="Predictive AI Engine"
+                dataMode="SIMULATED"
+                dataQuality="HIGH"
+                civilEngineeringDomain="Predictive Risk Score & Urban Multi-Hazard Forecast"
+                compact
+              />
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-3">
               <Brain className="w-8 h-8 text-indigo-400" />
